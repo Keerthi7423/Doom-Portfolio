@@ -1,48 +1,60 @@
-import express from 'express';
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
+import app from './app.js';
+import { config } from './config/env.js';
+import { connectDB, disconnectDB } from './config/db.js';
 
-// Load environment variables
-dotenv.config();
+let server;
 
-const app = express();
-const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI;
+/**
+ * Gracefully shuts down HTTP server and database connections
+ */
+const gracefulShutdown = async (signal) => {
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
 
-// 1. Security & utility middleware
-app.use(helmet());
-app.use(cors());
-app.use(morgan('dev'));
-app.use(express.json());
+  if (server) {
+    server.close(async () => {
+      console.log('🔒 HTTP server closed: No longer accepting new requests');
+      await disconnectDB();
+      console.log('👋 Process terminated gracefully');
+      process.exit(0);
+    });
+  } else {
+    await disconnectDB();
+    process.exit(0);
+  }
+};
 
-// 2. Health check route
-app.get('/api/v1/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString()
-  });
-});
-
-// 3. Connect DB and start listening
+/**
+ * Application Entrypoint
+ */
 async function startServer() {
   try {
-    if (!MONGODB_URI) {
-      throw new Error('MONGODB_URI is not defined in .env');
-    }
-    await mongoose.connect(MONGODB_URI);
-    console.log('✅ MongoDB connected successfully');
+    // 1. Connect to MongoDB Atlas first
+    await connectDB();
 
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
+    // 2. Start HTTP listener
+    server = app.listen(config.PORT, () => {
+      console.log(`🚀 Citadel Server active: http://localhost:${config.PORT} [${config.NODE_ENV}]`);
+      console.log(`📡 Health probe available: http://localhost:${config.PORT}/api/v1/health`);
     });
   } catch (error) {
-    console.error('❌ Server startup error:', error.message);
+    console.error('❌ Server startup failure:', error.message);
     process.exit(1);
   }
 }
+
+// OS Signal Traps
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// Global Process Error Handlers
+process.on('unhandledRejection', (reason) => {
+  console.error('💥 Unhandled Rejection:', reason);
+  gracefulShutdown('unhandledRejection');
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('💥 Uncaught Exception:', error.message);
+  process.exit(1);
+});
 
 startServer();
