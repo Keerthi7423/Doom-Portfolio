@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import healthRouter from './health.routes.js';
+import authRouter from './auth.routes.js';
 
-const router = Router();
+const apiRouter = Router();
 
-// Mount routes: all future routes (/auth, /projects) will be registered here
-router.use('/health', healthRouter);
+// Mount sub-routers
+apiRouter.use('/health', healthRouter);
+apiRouter.use('/auth', authRouter);
 
-export default router;
+export default apiRouter;
