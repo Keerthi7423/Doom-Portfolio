@@ -1,0 +1,175 @@
+================================================================================
+WEEK 1: MASTER STUDY PLAN, READING SYLLABUS & EVALUATION TEST
+================================================================================
+CANDIDATE PROFILE: 
+Frontend Developer (1 Year Experience) transitioning to Full-Stack / Backend
+TARGET GOAL: 
+Master production-grade Node.js, Express, MongoDB, Cryptography, and System Architecture
+================================================================================
+
+--------------------------------------------------------------------------------
+PART 1: THE FRONTEND-TO-BACKEND MENTAL BRIDGE
+--------------------------------------------------------------------------------
+As a frontend developer with 1 year of experience:
+- You know React, hooks, state, Axios/fetch, and UI components.
+- Now, you are building the OTHER side of the wire:
+  1. Frontend sends: `axios.post('/api/v1/auth/login', { email, password })`
+  2. Edge verifies: Cloudflare / Helmet security headers
+  3. Body Parser parses: raw TCP stream into `req.body`
+  4. Validator checks: Zod enforces types & strips unknown keys with `.strict()`
+  5. Controller executes: business logic, calls Mongoose
+  6. Database persists: MongoDB Atlas queries B-Tree index, bcrypt hashes password
+  7. Cookie is issued: `httpOnly`, `Secure`, `SameSite=Strict` attached to HTTP header
+  8. Response delivered: Standardized `ApiResponse` (status 200, clean JSON)
+
+--------------------------------------------------------------------------------
+PART 2: WHAT TO READ & STUDY (WEEK 1 CURRICULUM)
+--------------------------------------------------------------------------------
+
+1. REPOSITORY ARCHITECTURE DOCUMENTS (Internal):
+   - docs/adr/day1.md:
+     * Three-tier architecture (Client, Admin, API).
+     * Cloudflare Zero-Port Tunnel daemon (`cloudflared`).
+     * Defense-in-depth model (Edge -> App -> DB).
+   - docs/adr/day2.md:
+     * Decoupling `app.js` (Express config) from `server.js` (TCP listener).
+     * POSIX signals (`SIGINT` = Ctrl+C, `SIGTERM` = Docker/K8s stop).
+     * Fail-fast environment validation with Zod.
+     * Centralized Error Middleware (4-argument arity: `err, req, res, next`).
+   - docs/adr/day3.md & docs/notes/day3-code-breakdown.md:
+     * Mongoose schemas & compound indexes (`{ featured: 1, order: 1, createdAt: -1 }`).
+     * Bcrypt work factor (cost 12 = 4,096 rounds) vs Rainbow Tables.
+     * Zod `.strict()` defense against Mass Assignment (OWASP API3).
+   - docs/adr/day4.md:
+     * Double-Cookie pattern (`accessToken` 30m, `refreshToken` 7d).
+     * Why `localStorage` is insecure (XSS vulnerability) vs `httpOnly` cookies.
+     * Token Rotation & Reuse Detection in MongoDB.
+     * Gatekeeper middleware (`verifyJWT`).
+
+2. WEB & SECURITY STANDARDS (External):
+   - MDN HTTP Cookies:
+     * `httpOnly`: JavaScript (`document.cookie`) cannot read it. Stops XSS theft.
+     * `SameSite=Strict`: Browser will NOT send cookie on cross-site requests. Stops CSRF.
+     * `Secure`: Browser sends cookie ONLY over HTTPS.
+   - OWASP API Security Top 10:
+     * API1: Broken Object Level Authorization (BOLA).
+     * API2: Broken Authentication.
+     * API3: Broken Object Property Level Authorization (Mass Assignment).
+   - MongoDB Indexing:
+     * The ESR Rule: Equality -> Sort -> Range.
+     * `IXSCAN` (RAM index tree scan) vs `COLLSCAN` (slow disk scan).
+
+--------------------------------------------------------------------------------
+PART 3: THE END-OF-WEEK 1 TEST PROTOCOL (3 PHASES)
+--------------------------------------------------------------------------------
+
+At the end of Week 1, the AI Mentor will conduct this test. You will code
+and answer manually without AI code completion.
+
+--------------------------------------------------------------------------------
+PHASE 1: THE PRACTICAL CODING CHALLENGE (60 MINUTES)
+--------------------------------------------------------------------------------
+You will create a clean branch:
+`git checkout -b test/week-1-manual-assessment`
+
+You will manually implement from scratch:
+1. `src/config/env.js`:
+   - Zod schema for `PORT`, `NODE_ENV`, `MONGODB_URI`, `ACCESS_TOKEN_SECRET`.
+   - Fail-fast check with `process.exit(1)`.
+2. `src/utils/ApiError.js` & `asyncHandler.js`:
+   - Custom operational error extending native `Error`.
+   - Promise wrapper eliminating try/catch blocks.
+3. `src/middleware/validate.js`:
+   - Higher-order curried function `validate(schema) => (req, res, next)`.
+   - Formats Zod errors into uniform 400 Bad Request responses.
+4. `src/models/user.model.js`:
+   - Mongoose schema with `email`, `password` (`select: false`), `refreshToken`.
+   - Modern Mongoose 9 async `pre('save')` hook with bcrypt (cost 12).
+   - Methods: `isPasswordCorrect()` and `generateAccessToken()`.
+5. `src/controllers/auth.controller.js`:
+   - `login`: checks password, generates tokens, sets `httpOnly` cookies.
+   - `verifyJWT`: extracts token from cookie/header, verifies signature, attaches `req.user`.
+
+--------------------------------------------------------------------------------
+PHASE 2: SENIOR ENGINEERING MOCK INTERVIEW (10 QUESTIONS)
+--------------------------------------------------------------------------------
+You must answer these verbally/in text like a senior engineer:
+
+Q1: "As a frontend developer, you used to store JWTs in localStorage. 
+     Why did we switch to httpOnly cookies on the backend?"
+A1: Storing JWTs in localStorage exposes them to Cross-Site Scripting (XSS). 
+    Any third-party script, npm package, or injected `<script>` tag can run 
+    `localStorage.getItem('token')` and exfiltrate it. With `httpOnly: true`, 
+    the browser automatically attaches the cookie to requests, but JavaScript 
+    has zero access (`document.cookie` returns empty).
+
+Q2: "What is the difference between SHA-256 and Bcrypt cost factor 12?"
+A2: SHA-256 is a general-purpose cryptographic hash designed for high-speed 
+    throughput. A modern GPU can compute billions of SHA-256 hashes per second, 
+    making dictionary attacks against stolen databases trivial. Bcrypt uses the 
+    Eksblowfish algorithm and is intentionally slow. Work factor 12 runs 4,096 
+    iterations, taking ~300ms per attempt. This throttles offline brute-force attacks.
+
+Q3: "Why did we decouple app.js and server.js?"
+A3: Separation of concerns. `app.js` configures Express middleware, security 
+    headers, and route handlers without binding to a network port. This allows 
+    testing libraries like Supertest to import `app.js` and execute in-memory 
+    HTTP integration tests without port collisions (`EADDRINUSE`). `server.js` 
+    handles infrastructure: MongoDB connection and OS signal listeners.
+
+Q4: "Why did userSchema.pre('save', async function(next)) fail with 
+     'next is not a function' in Mongoose 8/9?"
+A4: Modern Mongoose natively supports Promises. When an `async` function is passed 
+    to `pre('save')`, Mongoose awaits the returned Promise and intentionally does 
+    NOT pass a `next` callback. Calling `next()` attempts to invoke `undefined`. 
+    The modern pattern is to omit `next` and return early or let the async resolve.
+
+Q5: "What is a Mass Assignment vulnerability and how does Zod stop it?"
+A5: Mass Assignment occurs when unvalidated user input (`req.body`) is passed 
+    directly to `Model.create(req.body)`. An attacker can inject `{ role: 'admin' }` 
+    to gain privileges. Chaining `.strict()` on Zod schemas causes the validator 
+    to reject any unexpected property with an HTTP 400 at the API boundary.
+
+Q6: "What is Token Rotation and why is it superior to static refresh tokens?"
+A6: Static refresh tokens allow an attacker who steals a token to issue access 
+    tokens indefinitely. With Token Rotation, using a refresh token immediately 
+    invalidates it and replaces it with a new one in MongoDB. If a stolen, 
+    previously used refresh token is presented, the server detects reuse and 
+    revokes the entire session.
+
+Q7: "Why is select: false used on passwords in Mongoose?"
+A7: Defense in Depth. It guarantees that standard queries (`find`, `findOne`) 
+    strip the password hash from the returned document, preventing accidental 
+    leaks in API JSON responses or console logs. Queries must explicitly opt-in 
+    using `.select('+password')`.
+
+Q8: "What is the ESR rule in MongoDB indexing?"
+A8: Equality, Sort, Range. In compound indexes, place fields matched with exact 
+    equality first, fields used for sorting second, and fields with range operators 
+    (`$gt`, `$lt`) last. This guarantees the B-tree resolves the query in RAM 
+    without collection scans or in-memory sorts.
+
+Q9: "What is POSIX SIGTERM and what happens during Graceful Shutdown?"
+A9: SIGTERM (Signal 15) is the termination signal sent by Docker, Kubernetes, 
+    or AWS ECS when replacing containers. Graceful shutdown stops accepting new 
+    connections (`server.close()`), waits for in-flight HTTP requests to drain, 
+    closes database connection pools, and exits cleanly with code 0.
+
+Q10: "How does Zod protect against NoSQL Injection?"
+A10: Attackers send objects with MongoDB operators like `{"email": {"$ne": null}}`. 
+     Without validation, MongoDB matches the first user in the database. Zod's 
+     `z.string().email()` enforces primitive strings and rejects objects with 400.
+
+--------------------------------------------------------------------------------
+PHASE 3: LIVE DEBUGGING DRILL (3 SCENARIOS)
+--------------------------------------------------------------------------------
+The AI Mentor will simulate 3 live production issues:
+1. Scenario A: Port collision (`EADDRINUSE`) - finding and killing orphaned processes.
+2. Scenario B: Mongoose pre-save hook hang or crash - diagnosing modern async hooks.
+3. Scenario C: CORS / Cookie block - diagnosing why browsers reject cookies when 
+   `credentials: true` or `SameSite` headers mismatch frontend origins.
+
+================================================================================
+RECORDED IN REPOSITORY: WEEK1_STUDY_PLAN_AND_TEST.txt
+MENTOR PROTOCOL ACTIVE.
+================================================================================
