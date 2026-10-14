@@ -19,6 +19,14 @@ const envSchema = z.object({
   CORS_ORIGIN: z
     .string()
     .default('http://localhost:5173,http://localhost:3000'),
+  ACCESS_TOKEN_SECRET: z
+    .string()
+    .min(16, 'ACCESS_TOKEN_SECRET must be at least 16 characters'),
+  ACCESS_TOKEN_EXPIRY: z.string().default('30m'),
+  REFRESH_TOKEN_SECRET: z
+    .string()
+    .min(16, 'REFRESH_TOKEN_SECRET must be at least 16 characters'),
+  REFRESH_TOKEN_EXPIRY: z.string().default('7d'),
 });
 
 // 3. Validate process.env against our schema
